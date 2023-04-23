@@ -99,20 +99,27 @@
 
 (defun remove-rows (array rows-to-remove)
   (let* ((num-rows (array-dimension array 0))
-         (rows-to-keep (remove-duplicates (delete-duplicates rows-to-remove :from-end t)))
+         (num-columns (array-dimension array 1))
          (num-rows-to-keep (- num-rows (length rows-to-remove)))
          (new-array (make-array (list num-rows-to-keep (array-dimension array 1)))))
     (loop for i below num-rows do
-      (unless (member i rows-to-keep)
-        (setf (row-major-aref new-array (- i (count-if #'<= rows-to-keep i)))
-              (row-major-aref array i))))
+      (unless (member i rows-to-remove)
+        (loop for c below num-columns do
+          (setf (row-major-aref new-array (array-row-major-index new-array (- i
+                                                                              ;; number of indices inside rows-to-remove smaller than the current
+                                                                              (count-if #'(lambda (k) (< k i)) rows-to-remove))
+                                                                 c))
+                (row-major-aref array (array-row-major-index array i c))))))
     new-array))
 
 (defmethod delete-atoms ((mol molecular-structure) &rest atom-indices)
-  (with-slots (atoms-list coord-arr) mol
-    (loop for ind in atom-indices
-          collecting (elt atoms-list ind) into refs
-          do (mapc #'(lambda (e) (delete e atoms-list)) refs))
-    (setf coord-arr (remove-rows atom-indices coord-arr))))
+  (let ((indices-zero-indexed (map #'1- atom-indices)))
+    (with-slots (atoms-list coord-arr) mol
+      ;; modify atoms array
+      (loop for ind in indices-zero-indexed
+            collecting (elt atoms-list ind) into refs
+            do (mapc #'(lambda (e) (delete e atoms-list)) refs))
+      ;; modify coordinate array
+      (setf coord-arr (remove-rows coord-arr indices-zero-indexed)))))
 
 (defvar mol7 (make-instance 'molecular-structure :filepath  "~/Downloads/Urea.xyz"))
