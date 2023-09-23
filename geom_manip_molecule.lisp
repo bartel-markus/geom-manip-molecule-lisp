@@ -86,9 +86,10 @@
   (with-slots (filepath atoms-list coord-arr) mol
     (let ((moldata (extract-moldata filepath)))
       (setf atoms-list (mapcar #'car moldata))
-      (setf coord-arr (make-array (list (length atoms-list) 3)
-                                  :initial-contents (mapcar #'cdr moldata)
-                                  :adjustable t)))))
+      (setf coord-arr (numcl:asarray
+                       (mapcar #'(lambda (row)
+                                   (cdr (mapcar #'read-from-string row)))
+                               moldata))))))
 
 (defmethod no-of-atoms ((mol molecular-structure))
   (length (atoms-list mol)))
@@ -98,28 +99,29 @@
         sum (cdr (assoc (string-downcase atom-symbol) *masses* :test #'string=))))
 
 (defun remove-rows (array rows-to-remove)
-  (let* ((num-rows (array-dimension array 0))
-         (num-columns (array-dimension array 1))
-         (num-rows-to-keep (- num-rows (length rows-to-remove)))
-         (new-array (make-array (list num-rows-to-keep (array-dimension array 1)))))
-    (loop for i below num-rows do
-      (unless (member i rows-to-remove)
-        (loop for c below num-columns do
-          (setf (row-major-aref new-array (array-row-major-index new-array (- i
-                                                                              ;; number of indices inside rows-to-remove smaller than the current
-                                                                              (count-if #'(lambda (k) (< k i)) rows-to-remove))
-                                                                 c))
-                (row-major-aref array (array-row-major-index array i c))))))
-    new-array))
+  (destructuring-bind (num-rows num-columns) (numcl:shape array)
+    ;; (magicl:from-list (loop for i below num-rows
+    ;;                         unless (member i rows-to-remove) nconc
+    ;;                                                          (loop for c below num-columns collect
+    ;;                                                                                        (magicl:tref array i c)))
+    ;;                   `(,(- num-rows (length rows-to-remove))
+    ;;                     ,num-columns))
+    ))
 
 (defmethod delete-atoms ((mol molecular-structure) &rest atom-indices)
-  (let ((indices-zero-indexed (map #'1- atom-indices)))
+  (let ((indices-zero-indexed (mapcar #'1- atom-indices)))
     (with-slots (atoms-list coord-arr) mol
-      ;; modify atoms array
-      (loop for ind in indices-zero-indexed
-            collecting (elt atoms-list ind) into refs
-            do (mapc #'(lambda (e) (delete e atoms-list)) refs))
+      ;; delete atom symbols from atoms array
+      (mapc #'(lambda (ind) (delete (elt atoms-list ind) atoms-list)) indices-zero-indexed)
+      ;; (loop for ind in indices-zero-indexed
+      ;;       collecting (elt atoms-list ind) into refs
+      ;;       do (mapc #'(lambda (e) (delete e atoms-list)) refs))
       ;; modify coordinate array
-      (setf coord-arr (remove-rows coord-arr indices-zero-indexed)))))
+      ;; (setf coord-arr (remove-rows coord-arr indices-zero-indexed))
+      )))
+
+(defmethod get-coord-by-no ((mol molecular-structure) N)
+  (with-slots (coord-arr) mol
+    (numcl:aref coord-arr (1- N))))
 
 (defvar mol7 (make-instance 'molecular-structure :filepath  "~/Downloads/Urea.xyz"))

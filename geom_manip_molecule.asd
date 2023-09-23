@@ -6,5 +6,6 @@
   :license  "Specify license here"
   :version "0.0.1"
   :serial t
+  :depends-on (#:numcl)
   :components ((:file "package")
                (:file "geom_manip_molecule")))
